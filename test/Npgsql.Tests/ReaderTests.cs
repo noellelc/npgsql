@@ -362,18 +362,17 @@ INSERT INTO {table} (name) VALUES ('Text with '' single quote');");
             Assert.That(reader.GetDataTypeName(0), Is.EqualTo(normalizedName));
         }
 
-        [Test]
+        [Test, IssueLink("https://github.com/npgsql/npgsql/issues/4369")]
         public async Task GetDataTypeName_enum()
         {
             var csb = new NpgsqlConnectionStringBuilder(ConnectionString)
             {
-                MaxPoolSize = 1
+                MaxPoolSize = 1,
             };
             await using var conn = await OpenConnectionAsync(csb);
             await using var _ = await GetTempTypeName(conn, out var typeName);
             await conn.ExecuteNonQueryAsync($"CREATE TYPE {typeName} AS ENUM ('one')");
-            await Task.Yield(); // TODO: fix multiplexing deadlock bug
-            conn.ReloadTypes();
+            await conn.ReloadTypesAsync();
             await using var cmd = new NpgsqlCommand($"SELECT 'one'::{typeName}", conn);
             await using var reader = await cmd.ExecuteReaderAsync(Behavior);
             await reader.ReadAsync();
@@ -390,8 +389,7 @@ INSERT INTO {table} (name) VALUES ('Text with '' single quote');");
             await using var conn = await OpenConnectionAsync(csb);
             await using var _ = await GetTempTypeName(conn, out var typeName);
             await conn.ExecuteNonQueryAsync($"CREATE DOMAIN {typeName} AS VARCHAR(10)");
-            await Task.Yield(); // TODO: fix multiplexing deadlock bug
-            conn.ReloadTypes();
+            await conn.ReloadTypesAsync();
             await using var cmd = new NpgsqlCommand($"SELECT 'one'::{typeName}", conn);
             await using var reader = await cmd.ExecuteReaderAsync(Behavior);
             await reader.ReadAsync();

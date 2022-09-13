@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Npgsql.NameTranslation;
 using NUnit.Framework;
 
 namespace Npgsql.Tests
@@ -186,6 +187,27 @@ namespace Npgsql.Tests
                 .ContinueWith(
                     (t, name) => (IAsyncDisposable)new DatabaseObjectDropper(conn, (string)name!, "SCHEMA"),
                     schemaName,
+                    TaskContinuationOptions.OnlyOnRanToCompletion);
+        }
+
+
+        /// <summary>
+        /// Creates a schema with a unique name, usable for a single test, and returns an <see cref="IDisposable"/> to
+        /// drop it at the end of the test.
+        /// </summary>
+        internal static Task<IAsyncDisposable> CreateEnum<TEnum>(NpgsqlConnection conn, out string enumName, out string[] enumValues, bool parallelizable = true, INpgsqlNameTranslator? nameTranslator = null)
+            where TEnum : struct, Enum
+        {
+            nameTranslator ??= new NpgsqlSnakeCaseNameTranslator();
+            var enumType = typeof(TEnum);
+            enumName = nameTranslator.TranslateTypeName(enumType.Name);
+            enumValues = Enum.GetNames(enumType).Select(n => nameTranslator.TranslateMemberName(n)).ToArray();
+            if (parallelizable)
+                enumName += Interlocked.Increment(ref _tempTypeCounter);
+            return conn.ExecuteNonQueryAsync($"DROP TYPE IF EXISTS {enumName} CASCADE; CREATE TYPE {enumName} AS ENUM ('{string.Join("', '", enumValues)}')")
+                .ContinueWith<IAsyncDisposable>(
+                    (_, name) => new DatabaseObjectDropper(conn, (string)name!, "TYPE"),
+                    enumName,
                     TaskContinuationOptions.OnlyOnRanToCompletion);
         }
 

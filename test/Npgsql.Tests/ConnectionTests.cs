@@ -1039,8 +1039,7 @@ LANGUAGE 'plpgsql'");
     }
 
     [Test, IssueLink("https://github.com/npgsql/npgsql/issues/824")]
-    [NonParallelizable]
-    public async Task ReloadTypes()
+    public async Task ReloadTypes([Values]bool async)
     {
         if (IsMultiplexing)
             return;
@@ -1049,19 +1048,29 @@ LANGUAGE 'plpgsql'");
         using (var conn = await OpenConnectionAsync(connectionString))
         using (var conn2 = await OpenConnectionAsync(connectionString))
         {
-            Assert.That(await conn.ExecuteScalarAsync("SELECT EXISTS (SELECT * FROM pg_type WHERE typname='reload_types_enum')"),
-                Is.False);
-            await conn.ExecuteNonQueryAsync("CREATE TYPE pg_temp.reload_types_enum AS ENUM ('First', 'Second')");
-            Assert.That(() => conn.TypeMapper.MapEnum<ReloadTypesEnum>(), Throws.Exception.TypeOf<ArgumentException>());
-            conn.ReloadTypes();
-            conn.TypeMapper.MapEnum<ReloadTypesEnum>();
+            await using var tmpEnum = await CreateEnum<ReloadTypesEnum>(conn, out var enumName, out _);
+            Assert.That(() => conn.TypeMapper.MapEnum<ReloadTypesEnum>(enumName), Throws.Exception.TypeOf<ArgumentException>());
+            if (async)
+                await conn.ReloadTypesAsync();
+            else
+            {
+                if (IsMultiplexing)
+                {
+                    Assert.That(() => conn.ReloadTypes(), Throws.InvalidOperationException);
+                    return;
+                }
+                // ReSharper disable once MethodHasAsyncOverload
+                conn.ReloadTypes();
+            }
+
+            conn.TypeMapper.MapEnum<ReloadTypesEnum>(enumName);
 
             // Make sure conn2 picks up the new type after a pooled close
             var connId = conn2.ProcessID;
             conn2.Close();
             conn2.Open();
             Assert.That(conn2.ProcessID, Is.EqualTo(connId), "Didn't get the same connector back");
-            conn2.TypeMapper.MapEnum<ReloadTypesEnum>();
+            conn2.TypeMapper.MapEnum<ReloadTypesEnum>(enumName);
         }
     }
     enum ReloadTypesEnum { First, Second };

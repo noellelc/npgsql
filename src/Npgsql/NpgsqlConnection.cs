@@ -1163,7 +1163,7 @@ public sealed class NpgsqlConnection : DbConnection, ICloneable, IComponent
             throw new ArgumentException("Must contain a COPY FROM STDIN command!", nameof(copyFromCommand));
 
         CheckReady();
-        var connector = StartBindingScope(ConnectorBindingScope.Copy);
+        var connector = await StartBindingScope(ConnectorBindingScope.Copy, async);
 
         LogMessages.StartingBinaryImport(connector.LoggingConfiguration.CopyLogger, connector.Id);
         // no point in passing a cancellationToken here, as we register the cancellation in the Init method
@@ -1217,7 +1217,7 @@ public sealed class NpgsqlConnection : DbConnection, ICloneable, IComponent
             throw new ArgumentException("Must contain a COPY TO STDOUT command!", nameof(copyToCommand));
 
         CheckReady();
-        var connector = StartBindingScope(ConnectorBindingScope.Copy);
+        var connector = await StartBindingScope(ConnectorBindingScope.Copy, async);
 
         LogMessages.StartingBinaryExport(connector.LoggingConfiguration.CopyLogger, connector.Id);
         // no point in passing a cancellationToken here, as we register the cancellation in the Init method
@@ -1277,7 +1277,7 @@ public sealed class NpgsqlConnection : DbConnection, ICloneable, IComponent
             throw new ArgumentException("Must contain a COPY FROM STDIN command!", nameof(copyFromCommand));
 
         CheckReady();
-        var connector = StartBindingScope(ConnectorBindingScope.Copy);
+        var connector = await StartBindingScope(ConnectorBindingScope.Copy, async);
 
         LogMessages.StartingTextImport(connector.LoggingConfiguration.CopyLogger, connector.Id);
         // no point in passing a cancellationToken here, as we register the cancellation in the Init method
@@ -1338,7 +1338,7 @@ public sealed class NpgsqlConnection : DbConnection, ICloneable, IComponent
             throw new ArgumentException("Must contain a COPY TO STDOUT command!", nameof(copyToCommand));
 
         CheckReady();
-        var connector = StartBindingScope(ConnectorBindingScope.Copy);
+        var connector = await StartBindingScope(ConnectorBindingScope.Copy, async);
 
         LogMessages.StartingTextExport(connector.LoggingConfiguration.CopyLogger, connector.Id);
         // no point in passing a cancellationToken here, as we register the cancellation in the Init method
@@ -1399,7 +1399,7 @@ public sealed class NpgsqlConnection : DbConnection, ICloneable, IComponent
             throw new ArgumentException("Must contain a COPY TO STDOUT OR COPY FROM STDIN command!", nameof(copyCommand));
 
         CheckReady();
-        var connector = StartBindingScope(ConnectorBindingScope.Copy);
+        var connector = await StartBindingScope(ConnectorBindingScope.Copy, async);
 
         LogMessages.StartingRawCopy(connector.LoggingConfiguration.CopyLogger, connector.Id);
         // no point in passing a cancellationToken here, as we register the cancellation in the Init method
@@ -1807,10 +1807,36 @@ public sealed class NpgsqlConnection : DbConnection, ICloneable, IComponent
         }
     }
 
-    internal NpgsqlConnector StartBindingScope(ConnectorBindingScope scope)
-        => StartBindingScope(scope, NpgsqlTimeout.Infinite, async: false, CancellationToken.None)
-            .GetAwaiter().GetResult();
+    /// <summary>
+    /// Synchronously starts a binding scope
+    /// </summary>
+    /// <param name="scope">The <see cref="ConnectorBindingScope"/> to start</param>
+    /// <param name="async">The <see cref="ConnectorBindingScope"/> to start</param>
+    /// <returns>
+    /// A <see cref="ValueTask"/> representing the connector to use within the started binding scope
+    /// </returns>
+    internal ValueTask<NpgsqlConnector> StartBindingScope(ConnectorBindingScope scope, bool async)
+        => StartBindingScope(scope, NpgsqlTimeout.Infinite, async, CancellationToken.None);
 
+    /// <summary>
+    /// Synchronously starts a binding scope
+    /// </summary>
+    /// <param name="scope">The <see cref="ConnectorBindingScope"/> to start</param>
+    /// <returns>A connector to use within the started binding scope</returns>
+    /// <remarks>
+    /// Warning: Never use this in async methods when multiplexing because it may block and cause a deadlock.
+    /// </remarks>
+    internal NpgsqlConnector StartBindingScope(ConnectorBindingScope scope)
+        => StartBindingScope(scope, async: false).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Synchronously starts a temporary binding scope
+    /// </summary>
+    /// <param name="connector">A connector to execute the temporary commands</param>
+    /// <returns>An <see cref="IDisposable"/> which ends the temporary binding scope when it is disposed</returns>
+    /// <remarks>
+    /// Warning: Never use this in async methods when multiplexing because it may block and cause a deadlock.
+    /// </remarks>
     internal EndScopeDisposable StartTemporaryBindingScope(out NpgsqlConnector connector)
     {
         connector = StartBindingScope(ConnectorBindingScope.Temporary);
@@ -2042,6 +2068,9 @@ public sealed class NpgsqlConnection : DbConnection, ICloneable, IComponent
     /// </summary>
     public void ReloadTypes()
     {
+        if (Settings.Multiplexing)
+            throw new NotSupportedException();
+
         CheckReady();
         using var scope = StartTemporaryBindingScope(out var connector);
         connector.LoadDatabaseInfo(
@@ -2053,17 +2082,41 @@ public sealed class NpgsqlConnection : DbConnection, ICloneable, IComponent
         // Increment the change counter on the global type mapper. This will make conn.Open() pick up the
         // new DatabaseInfo and set up a new connection type mapper
         TypeMapping.GlobalTypeMapper.Instance.RecordChange();
+    }
 
-        if (Settings.Multiplexing)
+    /// <inheritdoc cref="ReloadTypes"/>
+    public async Task ReloadTypesAsync()
+    {
+        CheckReady();
+        var connector = await StartBindingScope(ConnectorBindingScope.Temporary, true);
+        try
         {
-            var multiplexingTypeMapper = ((MultiplexingDataSource)NpgsqlDataSource).MultiplexingTypeMapper!;
-            Debug.Assert(multiplexingTypeMapper == connector.TypeMapper,
-                "A connector must reference the exact same TypeMapper the MultiplexingConnectorPool does");
-            // It's very probable that we've called ReloadTypes on the different connection than
-            // the MultiplexingConnectorPool references.
-            // Which means, we have to explicitly call Reset after we change the connector's DatabaseInfo to reload type mappings.
-            multiplexingTypeMapper.Connector.DatabaseInfo = connector.TypeMapper.DatabaseInfo;
-            multiplexingTypeMapper.Reset();
+            await connector.LoadDatabaseInfo(
+                forceReload: true,
+                NpgsqlTimeout.Infinite,
+                async: true,
+                CancellationToken.None);
+
+            // Increment the change counter on the global type mapper. This will make conn.Open() pick up the
+            // new DatabaseInfo and set up a new connection type mapper
+            TypeMapping.GlobalTypeMapper.Instance.RecordChange();
+
+            if (Settings.Multiplexing)
+            {
+                var multiplexingTypeMapper = ((MultiplexingDataSource)NpgsqlDataSource).MultiplexingTypeMapper!;
+                Debug.Assert(multiplexingTypeMapper == connector.TypeMapper,
+                    "A connector must reference the exact same TypeMapper the MultiplexingConnectorPool does");
+                // It's very probable that we've called ReloadTypes on the different connection than
+                // the MultiplexingConnectorPool references.
+                // Which means, we have to explicitly call Reset after we change the connector's DatabaseInfo to reload type mappings.
+                multiplexingTypeMapper.Connector.DatabaseInfo = connector.TypeMapper.DatabaseInfo;
+                multiplexingTypeMapper.Reset();
+            }
+
+        }
+        finally
+        {
+            EndBindingScope(ConnectorBindingScope.Temporary);
         }
     }
 
