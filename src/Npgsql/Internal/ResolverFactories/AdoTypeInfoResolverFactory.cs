@@ -32,8 +32,18 @@ sealed partial class AdoTypeInfoResolverFactory : PgTypeInfoResolverFactory
             var info = Mappings.Find(type, dataTypeName, options);
             if (info is null && dataTypeName is not null)
                 info = GetEnumTypeInfo(type, dataTypeName.GetValueOrDefault(), options);
+            if (info is null && type is not null && dataTypeName is not null)
+                info = GetStreamTypeInfo(type, dataTypeName.GetValueOrDefault(), options);
 
             return info;
+        }
+
+        static PgTypeInfo? GetStreamTypeInfo(Type type, DataTypeName dataTypeName, PgSerializerOptions options)
+        {
+            if (type != typeof(Stream))
+                return null;
+
+            return new PgTypeInfo(options, new ReadStreamConverter(), dataTypeName) { SupportsWriting = false };
         }
 
         static PgTypeInfo? GetEnumTypeInfo(Type? type, DataTypeName dataTypeName, PgSerializerOptions options)
