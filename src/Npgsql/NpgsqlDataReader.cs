@@ -1369,14 +1369,14 @@ public sealed class NpgsqlDataReader : DbDataReader, IDbColumnSchemaGenerator
         ThrowIfNotInResult();
         var field = RowDescription[ordinal];
         if (_isSequential)
-            throw new NotSupportedException("GetData() not supported in sequential mode.");
+            ThrowHelper.ThrowNotSupportedException("GetData() not supported in sequential mode.");
 
         var type = field.PostgresType;
         var isArray = type is PostgresArrayType;
         var elementType = isArray ? ((PostgresArrayType)type).Element : type;
         var compositeType = elementType as PostgresCompositeType;
         if (field.DataFormat is DataFormat.Text || (elementType.InternalName != "record" && compositeType == null))
-            throw new InvalidCastException("GetData() not supported for type " + field.TypeDisplayName);
+            ThrowHelper.ThrowInvalidCastException("GetData() not supported for type " + field.TypeDisplayName);
 
         var columnLength = SeekToColumn(async: false, ordinal, field.DataFormat, resumableOp: true).GetAwaiter().GetResult();
         if (columnLength is -1)
@@ -1484,7 +1484,7 @@ public sealed class NpgsqlDataReader : DbDataReader, IDbColumnSchemaGenerator
         // Check whether we can do resumable reads.
         var field = GetInfo(ordinal, typeof(GetChars), out var converter, out var bufferRequirement, out var asObject);
         if (converter is not IResumableRead { Supported: true })
-            throw new NotSupportedException("The GetChars method is not supported for this column type");
+            ThrowHelper.ThrowNotSupportedException("The GetChars method is not supported for this column type");
 
         if (dataOffset is < 0 or > int.MaxValue)
             ThrowHelper.ThrowArgumentOutOfRangeException(nameof(dataOffset), "dataOffset must be between 0 and {0}", int.MaxValue);
