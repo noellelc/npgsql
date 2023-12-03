@@ -1421,11 +1421,11 @@ public sealed class NpgsqlDataReader : DbDataReader, IDbColumnSchemaGenerator
         var field = RowDescription[ordinal];
 
         if (dataOffset is < 0 or > int.MaxValue)
-            throw new ArgumentOutOfRangeException(nameof(dataOffset), dataOffset, "dataOffset must be between 0 and " + int.MaxValue);
+            ThrowHelper.ThrowArgumentOutOfRangeException(nameof(dataOffset), "dataOffset must be between 0 and {0}", int.MaxValue);
         if (buffer != null && (bufferOffset < 0 || bufferOffset >= buffer.Length + 1))
-            throw new IndexOutOfRangeException($"bufferOffset must be between 0 and {buffer.Length}");
+            ThrowHelper.ThrowIndexOutOfRangeException("bufferOffset must be between 0 and {0}", buffer.Length);
         if (buffer != null && (length < 0 || length > buffer.Length - bufferOffset))
-            throw new IndexOutOfRangeException($"length must be between 0 and {buffer.Length - bufferOffset}");
+            ThrowHelper.ThrowIndexOutOfRangeException("bufferOffset must be between 0 and {0}", buffer.Length - bufferOffset);
 
         var columnLength = SeekToColumn(async: false, ordinal, field.DataFormat, resumableOp: true).GetAwaiter().GetResult();
         if (columnLength == -1)
@@ -1487,11 +1487,11 @@ public sealed class NpgsqlDataReader : DbDataReader, IDbColumnSchemaGenerator
             throw new NotSupportedException("The GetChars method is not supported for this column type");
 
         if (dataOffset is < 0 or > int.MaxValue)
-            throw new ArgumentOutOfRangeException(nameof(dataOffset), dataOffset, "dataOffset must be between 0 and " + int.MaxValue);
+            ThrowHelper.ThrowArgumentOutOfRangeException(nameof(dataOffset), "dataOffset must be between 0 and {0}", int.MaxValue);
         if (buffer != null && (bufferOffset < 0 || bufferOffset >= buffer.Length + 1))
-            throw new IndexOutOfRangeException($"bufferOffset must be between 0 and {buffer.Length}");
+            ThrowHelper.ThrowIndexOutOfRangeException("bufferOffset must be between 0 and {0}", buffer.Length);
         if (buffer != null && (length < 0 || length > buffer.Length - bufferOffset))
-            throw new IndexOutOfRangeException($"length must be between 0 and {buffer.Length - bufferOffset}");
+            ThrowHelper.ThrowIndexOutOfRangeException("bufferOffset must be between 0 and {0}", buffer.Length - bufferOffset);
 
         var columnLength = SeekToColumn(async: false, ordinal, field, resumableOp: true).GetAwaiter().GetResult();
         if (columnLength == -1)
