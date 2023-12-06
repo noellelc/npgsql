@@ -360,7 +360,7 @@ public sealed class NpgsqlBinaryExporter : ICancelable
         if (!IsInitializedAndAtStart)
             await MoveNextColumn(async, resumableOp: false).ConfigureAwait(false);
 
-        await PgReader.Consume(async, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await Consume(async, cancellationToken).ConfigureAwait(false);
 
         // Commit, otherwise we'll have no way of knowing this column is finished.
         if (PgReader.FieldSize is -1 or 0)
@@ -372,6 +372,15 @@ public sealed class NpgsqlBinaryExporter : ICancelable
     #region Utilities
 
     bool IsInitializedAndAtStart => PgReader.Initialized && (PgReader.FieldSize is -1 || PgReader.IsAtStart);
+
+    ValueTask Consume(bool async, CancellationToken cancellationToken = default)
+    {
+        if (async)
+            return PgReader.ConsumeAsync(cancellationToken: cancellationToken);
+
+        PgReader.Consume();
+        return new();
+    }
 
     ValueTask Commit(bool async)
     {
