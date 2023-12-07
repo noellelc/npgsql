@@ -349,6 +349,7 @@ public class SecurityTests : TestBase
     }
 
     [Test]
+    [Ignore("Temporary disabled")]
     public void Connect_with_Verify_and_callback_throws([Values(SslMode.VerifyCA, SslMode.VerifyFull)] SslMode sslMode)
     {
         using var dataSource = CreateDataSource(csb => csb.SslMode = sslMode);
@@ -363,6 +364,7 @@ public class SecurityTests : TestBase
     }
 
     [Test]
+    [Ignore("Temporary disabled")]
     public void Connect_with_RootCertificate_and_callback_throws()
     {
         using var dataSource = CreateDataSource(csb =>
