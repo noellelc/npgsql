@@ -279,7 +279,7 @@ public sealed partial class NpgsqlConnector
 
 #pragma warning disable CA1859
     // We're casting to IDisposable to not explicitly reference X509Certificate2 for NativeAOT
-    // TODO: might probably be pointless now, needs to be rechecked
+    // TODO: probably pointless now, needs to be rechecked
     IDisposable? _certificate;
 #pragma warning restore CA1859
 
@@ -337,7 +337,7 @@ public sealed partial class NpgsqlConnector
         : this(dataSource)
     {
         if (conn.SslClientAuthenticationOptionsCallback is not null)
-            SslClientAuthenticationOptionsCallback = SslClientAuthenticationOptionsCallback;
+            SslClientAuthenticationOptionsCallback = conn.SslClientAuthenticationOptionsCallback;
 
 #pragma warning disable CS0618 // Obsolete
         ProvidePasswordCallback = conn.ProvidePasswordCallback;
