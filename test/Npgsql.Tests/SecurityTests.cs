@@ -328,10 +328,13 @@ public class SecurityTests : TestBase
         dataSourceBuilder.ConnectionStringBuilder.SslMode = SslMode.Require;
         await using var dataSource = dataSourceBuilder.Build();
         await using var connection = dataSource.CreateConnection();
-        connection.UserCertificateValidationCallback = (_, _, _, _) =>
+        connection.SslClientAuthenticationOptionsCallback = options =>
         {
-            callbackWasInvoked = true;
-            return acceptCertificate;
+            options.RemoteCertificateValidationCallback = (_, _, _, _) =>
+            {
+                callbackWasInvoked = true;
+                return acceptCertificate;
+            };
         };
 
         if (acceptCertificate)
@@ -350,7 +353,10 @@ public class SecurityTests : TestBase
     {
         using var dataSource = CreateDataSource(csb => csb.SslMode = sslMode);
         using var connection = dataSource.CreateConnection();
-        connection.UserCertificateValidationCallback = (_, _, _, _) => true;
+        connection.SslClientAuthenticationOptionsCallback = options =>
+        {
+            options.RemoteCertificateValidationCallback = (_, _, _, _) => true;
+        };
 
         var ex = Assert.ThrowsAsync<ArgumentException>(async () => await connection.OpenAsync())!;
         Assert.That(ex.Message, Is.EqualTo(string.Format(NpgsqlStrings.CannotUseSslVerifyWithUserCallback, sslMode)));
@@ -365,7 +371,10 @@ public class SecurityTests : TestBase
             csb.RootCertificate = "foo";
         });
         using var connection = dataSource.CreateConnection();
-        connection.UserCertificateValidationCallback = (_, _, _, _) => true;
+        connection.SslClientAuthenticationOptionsCallback = options =>
+        {
+            options.RemoteCertificateValidationCallback = (_, _, _, _) => true;
+        };
 
         var ex = Assert.ThrowsAsync<ArgumentException>(async () => await connection.OpenAsync())!;
         Assert.That(ex.Message, Is.EqualTo(string.Format(NpgsqlStrings.CannotUseSslRootCertificateWithUserCallback)));
