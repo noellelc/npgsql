@@ -554,7 +554,7 @@ public class NpgsqlParameter : DbParameter, IDbDataParameter, ICloneable
                 if (valueType == typeof(DBNull))
                 {
                     valueType = null;
-                    pgTypeId ??= options.ToCanonicalTypeId(options.UnknownPgType);
+                    pgTypeId ??= options.ToCanonicalTypeId(options.UnspecifiedPgType);
                 }
             }
 

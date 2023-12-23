@@ -95,7 +95,7 @@ sealed partial class AdoTypeInfoResolverFactory : PgTypeInfoResolverFactory
             // Alternative text types
             foreach(var dataTypeName in new[] { "citext", DataTypeNames.Varchar,
                         DataTypeNames.Bpchar, DataTypeNames.Json,
-                        DataTypeNames.Xml, DataTypeNames.Name, DataTypeNames.RefCursor })
+                        DataTypeNames.Xml, DataTypeNames.Name, DataTypeNames.RefCursor, DataTypeNames.Unknown })
             {
                 mappings.AddType<string>(dataTypeName,
                     static (options, mapping, _) => mapping.CreateInfo(options, new StringTextConverter(options.TextEncoding), preferredFormat: DataFormat.Text), isDefault: true);
@@ -262,11 +262,6 @@ sealed partial class AdoTypeInfoResolverFactory : PgTypeInfoResolverFactory
                 static (options, mapping, _) => mapping.CreateInfo(options, new HstoreConverter<Dictionary<string, string?>>(options.TextEncoding)), isDefault: true);
             mappings.AddType<IDictionary<string, string?>>("hstore",
                 static (options, mapping, _) => mapping.CreateInfo(options, new HstoreConverter<IDictionary<string, string?>>(options.TextEncoding)));
-
-            // Unknown
-            mappings.AddType<string>(DataTypeNames.Unknown,
-                static (options, mapping, _) => mapping.CreateInfo(options, new StringTextConverter(options.TextEncoding), preferredFormat: DataFormat.Text),
-                MatchRequirement.DataTypeName);
 
             // Void
             mappings.AddType<object>(DataTypeNames.Void,

@@ -22,11 +22,13 @@ public sealed class PgSerializerOptions
     {
         _timeZoneProvider = timeZoneProvider;
         DatabaseInfo = databaseInfo;
-        UnknownPgType = databaseInfo.GetPostgresType("unknown");
+        UnspecifiedPgType = databaseInfo.GetPostgresType(DataTypeNames.Unknown);
     }
 
-    // Represents the 'unknown' type, which can be used for reading and writing arbitrary text values.
-    public PostgresType UnknownPgType { get; }
+    // The postgres type used when no type is specified.
+    // This is used to write a DBNull.Value which needs to have *some* oid.
+    // This is also used for reading data with postgres types unsupported by Npgsql, in which case it's read as text.
+    internal PostgresType UnspecifiedPgType { get; }
 
     // Used purely for type mapping, where we don't have a full set of types but resolvers might know enough.
     readonly bool _introspectionInstance;

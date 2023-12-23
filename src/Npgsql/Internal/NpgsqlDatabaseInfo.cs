@@ -228,6 +228,7 @@ public abstract class NpgsqlDatabaseInfo
 
     internal void ProcessTypes()
     {
+        var hasUnknown = false;
         foreach (var type in GetTypes())
         {
             ByOID[type.OID] = type;
@@ -237,6 +238,9 @@ public abstract class NpgsqlDatabaseInfo
             ByName[type.InternalName] = ByName.ContainsKey(type.InternalName)
                 ? null
                 : type;
+
+            if (!hasUnknown && type.DataTypeName == DataTypeNames.Unknown)
+                hasUnknown = true;
 
             switch (type)
             {
@@ -264,6 +268,17 @@ public abstract class NpgsqlDatabaseInfo
             default:
                 throw new ArgumentOutOfRangeException();
             }
+        }
+
+        // Some databases like CrateDB have no unknown type but do support unspecified parameters (oid 0).
+        // We synthesize a type here to make sure our own dependencies on unknown can use it.
+        // We don't add this type to the list of base types, since it's not a real type (impacts GetDataTypes).
+        if (!hasUnknown)
+        {
+            var type = new PostgresBaseType(DataTypeNames.Unknown, 0);
+            ByOID[type.OID] = type;
+            ByFullName[type.DataTypeName.Value] = type;
+            ByName[type.InternalName] = type;
         }
     }
 
